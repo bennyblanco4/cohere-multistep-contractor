@@ -43,7 +43,7 @@ internet_search.args_schema = TavilySearchInput
 embd = CohereEmbeddings()
 
 urls = [
-    "https://paulgraham.com/best.html",
+    "https://www.albaniandailynews.com/",
 ]
 
 docs = [WebBaseLoader(url).load() for url in urls]
