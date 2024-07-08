@@ -1,9 +1,0 @@
-Flask
-langchain
-langchain_cohere
-langchain_core
-langchain_community
-langchain_experimental
-gunicorn==20.1.0
-beautifulsoup4
-tiktoken
