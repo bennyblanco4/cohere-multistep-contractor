@@ -178,10 +178,39 @@ def ask():
         "preamble": preamble,
     })
     logging.info(f"Agent response: {response}")
+    
+    # Get the actions logged by ActionLogger
+    actions = action_logger.get_actions()
+    
+    # Process the actions to add appropriate emojis
+    formatted_actions = []
+    for action in actions:
+        if "Chain started" in action:
+            formatted_actions.append(f"🤔 {action}")
+        elif "Tool used:" in action:
+            if "internet_search" in action:
+                formatted_actions.append(f"🔍 Looking for online sources relevant to your query \"{question}\"...")
+            elif "vectorstore_search" in action:
+                formatted_actions.append(f"📚 Searching through stored knowledge about writing essays...")
+            else:
+                formatted_actions.append(f"🛠️ {action}")
+        elif "Started tool:" in action:
+            if "internet_search" in action:
+                formatted_actions.append(f"🌐 Searching the internet...")
+            elif "vectorstore_search" in action:
+                formatted_actions.append(f"🗃️ Querying the essay writing knowledge base...")
+            else:
+                formatted_actions.append(f"⚙️ {action}")
+        elif "Tool finished" in action:
+            formatted_actions.append(f"✅ {action}")
+        elif "Thought:" in action:
+            formatted_actions.append(f"💭 {action}")
+        else:
+            formatted_actions.append(action)
+
     return jsonify({
         'answer': response['output'],
-        'actions': action_logger.get_actions()
+        'actions': formatted_actions
     })
-
 if __name__ == '__main__':
     app.run(debug=True)

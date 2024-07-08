@@ -25,6 +25,7 @@
                     <div id="actions" class="space-y-2"></div>
                 </div>
             </div>
+            </div>
         </div>
     </div>
 
@@ -35,19 +36,48 @@
             const answerDiv = document.getElementById('answer');
             const actionsDiv = document.getElementById('actions');
 
+
             function displayActionsSequentially(actions) {
-                actionsDiv.innerHTML = '';
-                actions.forEach((action, index) => {
-                    setTimeout(() => {
-                        const actionElement = document.createElement('div');
-                        actionElement.className = 'p-2 bg-gray-100 rounded mb-2 opacity-0 transition-opacity duration-500';
-                        actionElement.textContent = `${index + 1}. ${action}`;
-                        actionsDiv.appendChild(actionElement);
-                        setTimeout(() => actionElement.classList.add('opacity-100'), 50);
-                    }, index * 500); // Delay each action by 500ms
-                });
+    actionsDiv.innerHTML = '';
+    actions.forEach((action, index) => {
+        setTimeout(() => {
+            const actionElement = document.createElement('div');
+            actionElement.className = 'flex items-center p-2 bg-gray-100 rounded mb-2 opacity-0 transition-opacity duration-500';
+            
+            let icon = '';
+            let text = action;
+
+            // Extract emoji if present at the start of the action text
+            const emojiMatch = action.match(/^(\p{Emoji}+)/u);
+            if (emojiMatch) {
+                icon = emojiMatch[1];
+                text = action.slice(icon.length).trim();
+            } else if (action.includes('Initiated')) {
+                icon = '📊';
+            } else if (action.includes('Looking for')) {
+                icon = '🔍';
+            } else if (action.includes('Found')) {
+                icon = '🌐';
+            } else if (action.includes('Finalized')) {
+                icon = '✅';
             }
 
+            if (icon) {
+                const iconSpan = document.createElement('span');
+                iconSpan.className = 'mr-2 text-xl';
+                iconSpan.textContent = icon;
+                actionElement.appendChild(iconSpan);
+            }
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = text;
+            actionElement.appendChild(textSpan);
+            
+            actionsDiv.appendChild(actionElement);
+            setTimeout(() => actionElement.classList.add('opacity-100'), 50);
+        }, index * 500);
+    });
+}
             submitButton.addEventListener('click', function() {
                 const question = questionTextarea.value;
                 submitButton.disabled = true;
