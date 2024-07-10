@@ -32,15 +32,11 @@
                 <div class="flex space-x-7">
                     <div>
                         <a href="#" class="flex items-center py-4 px-2">
-                            <span class="font-semibold text-gray-500 text-lg">AI Agent Interface</span>
+                            <span class="font-semibold text-gray-500 text-lg">AI Agent</span>
                         </a>
                     </div>
                 </div>
-                <div class="hidden md:flex items-center space-x-3">
-                    <a href="#" class="py-2 px-2 font-medium text-gray-500 rounded hover:bg-blue-500 hover:text-white transition duration-300">Home</a>
-                    <a href="#" class="py-2 px-2 font-medium text-gray-500 rounded hover:bg-blue-500 hover:text-white transition duration-300">About</a>
-                    <a href="#" class="py-2 px-2 font-medium text-gray-500 rounded hover:bg-blue-500 hover:text-white transition duration-300">Contact</a>
-                </div>
+               
             </div>
         </div>
     </nav>
@@ -59,11 +55,7 @@
         </div>
     </div>
 
-    <footer class="bg-white shadow-lg mt-8">
-        <div class="max-w-6xl mx-auto py-4 px-4 text-center text-gray-500">
-            © 2024 AI Agent Interface. All rights reserved.
-        </div>
-    </footer>
+ 
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -71,28 +63,32 @@
             const submitButton = document.getElementById('submit');
             const answerDiv = document.getElementById('answer');
             const actionsDiv = document.getElementById('actions');
-
+    
             function startThinking() {
                 questionTextarea.style.animation = 'fadeinout 2s linear infinite';
                 submitButton.innerHTML = 'Thinking<span class="thinking-dots"></span>';
                 submitButton.disabled = true;
                 actionsDiv.classList.remove('hidden');
                 actionsDiv.innerHTML = '';
+                answerDiv.textContent = '';
             }
-
+    
             function stopThinking() {
                 questionTextarea.style.animation = '';
                 submitButton.textContent = 'Ask';
                 submitButton.disabled = false;
             }
-
+    
+            function displayAction(action) {
+                actionsDiv.textContent = action;
+            }
+    
             submitButton.addEventListener('click', function() {
                 const question = questionTextarea.value;
-                answerDiv.innerHTML = '';
                 startThinking();
-
+    
                 const eventSource = new EventSource(`/ask?question=${encodeURIComponent(question)}`);
-
+    
                 eventSource.onmessage = function(event) {
                     const data = JSON.parse(event.data);
                     if (data.type === 'action') {
@@ -101,9 +97,13 @@
                         answerDiv.textContent = data.content;
                         eventSource.close();
                         stopThinking();
+                    } else if (data.type === 'error') {
+                        answerDiv.textContent = data.content;
+                        eventSource.close();
+                        stopThinking();
                     }
                 };
-
+    
                 eventSource.onerror = function(error) {
                     console.error('EventSource failed:', error);
                     answerDiv.textContent = "An error occurred. Please try again.";

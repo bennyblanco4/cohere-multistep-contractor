@@ -23,10 +23,13 @@ from typing import Dict, List, Any
 import matplotlib.pyplot as plt
 import re
 import urllib.parse
-import asyncio
+import traceback
+from queue import Queue
+from threading import Thread
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Set API keys
 os.environ['COHERE_API_KEY'] = '2EsHiwqs35gpeVzU5aGeVjs9kYXBOTj1nWRSjAZi'
@@ -90,53 +93,46 @@ When using the internet_search tool, make sure to:
 prompt = ChatPromptTemplate.from_template("{input}")
 
 class ActionLogger(BaseCallbackHandler):
-    def __init__(self):
-        self.actions = []
+    def __init__(self, queue):
+        self.queue = queue
 
     def on_agent_action(self, action: AgentAction, **kwargs: Any) -> None:
-        self.actions.append(f"Tool used: {action.tool}")
+        self.queue.put(f"🛠️ Tool used: {action.tool}")
+        logger.debug(f"Agent action: {action.tool}")
 
     def on_agent_finish(self, finish: AgentFinish, **kwargs: Any) -> None:
-        self.actions.append("Agent finished.")
+        self.queue.put("✅ Agent finished")
+        logger.debug("Agent finished")
 
     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.actions.append("Chain started.")
+        self.queue.put("🔎 Searching")
+        logger.debug("Chain started")
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.actions.append("Chain ended.")
+        self.queue.put("✅ Done")
+        logger.debug("Chain ended")
 
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> None:
-        self.actions.append(f"Started tool: {serialized['name']} with input: {input_str}")
+        self.queue.put(f"Started tool: {serialized['name']} with input: {input_str}")
+        logger.debug(f"Started tool: {serialized['name']} with input: {input_str}")
 
     def on_tool_end(self, output: str, **kwargs: Any) -> None:
-        self.actions.append(f"Tool finished with output: {output}")
+        self.queue.put(f"Tool finished with output: {output}")
+        logger.debug(f"Tool finished with output: {output}")
 
     def on_tool_error(self, error: Exception, **kwargs: Any) -> None:
-        self.actions.append(f"Tool error: {str(error)}")
+        self.queue.put(f"Tool error: {str(error)}")
+        logger.error(f"Tool error: {str(error)}")
 
     def on_text(self, text: str, **kwargs: Any) -> None:
-        self.actions.append(f"Thought: {text}")
-
-    def get_actions(self):
-        return self.actions
-
-    def clear(self):
-        self.actions = []
-
-action_logger = ActionLogger()
+        self.queue.put(f"Thought: {text}")
+        logger.debug(f"Thought: {text}")
 
 # Create the ReAct agent
 agent = create_cohere_react_agent(
     llm=llm,
     tools=[internet_search, vectorstore_search],
     prompt=prompt,
-)
-
-agent_executor = AgentExecutor(
-    agent=agent, 
-    tools=[internet_search, vectorstore_search], 
-    verbose=True, 
-    callbacks=[action_logger]
 )
 
 @app.route('/')
@@ -146,27 +142,47 @@ def home():
 @app.route('/ask')
 def ask():
     question = request.args.get('question')
-    action_logger.clear()
+    logger.info(f"Received question: {question}")
 
     def generate():
-        async def run_agent():
-            response = await agent_executor.ainvoke({
-                "input": question,
-                "preamble": preamble,
-            })
-            return response['output']
+        queue = Queue()
+        action_logger = ActionLogger(queue)
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        agent_executor = AgentExecutor(
+            agent=agent, 
+            tools=[internet_search, vectorstore_search], 
+            verbose=True, 
+            callbacks=[action_logger]
+        )
+
+        def run_agent():
+            try:
+                response = agent_executor.invoke({
+                    "input": question,
+                    "preamble": preamble,
+                })
+                queue.put(("answer", response['output']))
+            except Exception as e:
+                logger.error(f"Error in run_agent: {str(e)}")
+                logger.error(traceback.format_exc())
+                queue.put(("error", f"An error occurred: {str(e)}"))
+
+        Thread(target=run_agent).start()
 
         yield f"data: {json.dumps({'type': 'start', 'content': 'Starting agent...'})}\n\n"
 
-        final_answer = loop.run_until_complete(run_agent())
-
-        for action in action_logger.actions:
-            yield f"data: {json.dumps({'type': 'action', 'content': action})}\n\n"
-
-        yield f"data: {json.dumps({'type': 'answer', 'content': final_answer})}\n\n"
+        while True:
+            try:
+                item = queue.get(timeout=1)
+                if isinstance(item, tuple):
+                    item_type, content = item
+                    yield f"data: {json.dumps({'type': item_type, 'content': content})}\n\n"
+                    if item_type in ('answer', 'error'):
+                        break
+                else:
+                    yield f"data: {json.dumps({'type': 'action', 'content': item})}\n\n"
+            except:
+                continue
 
     return Response(generate(), content_type='text/event-stream')
 
