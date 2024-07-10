@@ -72,34 +72,6 @@
             const answerDiv = document.getElementById('answer');
             const actionsDiv = document.getElementById('actions');
 
-            function displayAction(action) {
-                const actionElement = document.createElement('div');
-                actionElement.className = 'flex items-center mb-2';
-                
-                let icon = '';
-                let text = action;
-
-                const emojiMatch = action.match(/^(\p{Emoji}+)/u);
-                if (emojiMatch) {
-                    icon = emojiMatch[1];
-                    text = action.slice(icon.length).trim();
-                }
-
-                if (icon) {
-                    const iconSpan = document.createElement('span');
-                    iconSpan.className = 'mr-2 text-xl';
-                    iconSpan.textContent = icon;
-                    actionElement.appendChild(iconSpan);
-                }
-                
-                const textSpan = document.createElement('span');
-                textSpan.textContent = text;
-                actionElement.appendChild(textSpan);
-                
-                actionsDiv.appendChild(actionElement);
-                actionsDiv.scrollTop = actionsDiv.scrollHeight;
-            }
-
             function startThinking() {
                 questionTextarea.style.animation = 'fadeinout 2s linear infinite';
                 submitButton.innerHTML = 'Thinking<span class="thinking-dots"></span>';
