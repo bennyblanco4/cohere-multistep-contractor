@@ -1,1 +1,1 @@
-web: gunicorn app:cohere-multistep-demo
+web: gunicorn app:app
