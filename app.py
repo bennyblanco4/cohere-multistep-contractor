@@ -71,14 +71,24 @@ def parse_query_with_cohere(query):
     
     # Parse the response
     lines = response.content.strip().split('\n')
-    service = lines[0].split(':')[1].strip()
-    location = lines[1].split(':')[1].strip()
-    country = lines[2].split(':')[1].strip()
+    service = "General service"
+    location = "Toronto, ON"
+    country = "Canada"
+    
+    for line in lines:
+        if line.startswith("Service:"):
+            service = line.split(':', 1)[1].strip()
+        elif line.startswith("Location:"):
+            location = line.split(':', 1)[1].strip()
+        elif line.startswith("Country:"):
+            country = line.split(':', 1)[1].strip()
     
     return service, location, country
 
 def generate_yellowpages_url(query):
     service, location, country = parse_query_with_cohere(query)
+    
+    logger.info(f"Parsed query: Service: {service}, Location: {location}, Country: {country}")
     
     if country.lower() == 'usa':
         service = urllib.parse.quote(service)
@@ -90,9 +100,10 @@ def generate_yellowpages_url(query):
         url = f"https://www.yellowpages.ca/search/si/1/{service}/{location}"
     else:
         # For other countries, return None to indicate we should use internet search
+        logger.info(f"Country {country} not supported, falling back to internet search")
         return None
     
-    print(f"Generated URL: {url}")
+    logger.info(f"Generated URL: {url}")
     return url
 
 def create_yellowpages_tool(query):
@@ -157,11 +168,11 @@ class ActionLogger(BaseCallbackHandler):
         logger.debug("Agent finished")
 
     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.queue.put("🏁 Search started.")
+        self.queue.put("🔎 Search started.")
         logger.debug("Chain started")
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.queue.put("✅ Search ended.")
+        self.queue.put("✅ Agent finished.")
         logger.debug("Chain ended")
 
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> None:
