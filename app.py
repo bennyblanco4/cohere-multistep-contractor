@@ -149,19 +149,19 @@ class ActionLogger(BaseCallbackHandler):
         self.queue = queue
 
     def on_agent_action(self, action: AgentAction, **kwargs: Any) -> None:
-        self.queue.put(f"Tool used: {action.tool}")
+        self.queue.put(f"🛠️ Tool used: {action.tool}")
         logger.debug(f"Agent action: {action.tool}")
 
     def on_agent_finish(self, finish: AgentFinish, **kwargs: Any) -> None:
-        self.queue.put("Agent finished.")
+        self.queue.put("✅ Agent finished.")
         logger.debug("Agent finished")
 
     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.queue.put("Chain started.")
+        self.queue.put("🏁 Search started.")
         logger.debug("Chain started")
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.queue.put("Chain ended.")
+        self.queue.put("✅ Search ended.")
         logger.debug("Chain ended")
 
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> None:
