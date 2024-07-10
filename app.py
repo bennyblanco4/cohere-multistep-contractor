@@ -18,7 +18,7 @@ from langchain_core.tools import tool
 import random
 import logging
 from langchain.callbacks.base import BaseCallbackHandler
-from langchain.schema import AgentAction, AgentFinish
+from langchain.schema import AgentAction, AgentFinish, HumanMessage
 from typing import Dict, List, Any
 import matplotlib.pyplot as plt
 import re
@@ -50,39 +50,91 @@ internet_search.args_schema = TavilySearchInput
 # Vector store tool
 embd = CohereEmbeddings()
 
-urls = [
-    "https://news.ycombinator.com/"
-]
+def parse_query_with_cohere(query):
+    chat_model = ChatCohere(model="command", temperature=0)
+    
+    prompt = f"""
+    Parse the following query into a service, location, and country for a Yellow Pages search.
+    Query: {query}
+    
+    Respond in the following format:
+    Service: [extracted service]
+    Location: [extracted location]
+    Country: [USA/Canada/Other]
+    
+    If a location isn't specified, use 'Toronto, ON' and 'Canada' as defaults.
+    If a country isn't clearly specified, infer it from the location if possible.
+    """
+    
+    messages = [HumanMessage(content=prompt)]
+    response = chat_model.invoke(messages)
+    
+    # Parse the response
+    lines = response.content.strip().split('\n')
+    service = lines[0].split(':')[1].strip()
+    location = lines[1].split(':')[1].strip()
+    country = lines[2].split(':')[1].strip()
+    
+    return service, location, country
 
-docs = [WebBaseLoader(url).load() for url in urls]
-docs_list = [item for sublist in docs for item in sublist]
+def generate_yellowpages_url(query):
+    service, location, country = parse_query_with_cohere(query)
+    
+    if country.lower() == 'usa':
+        service = urllib.parse.quote(service)
+        location = urllib.parse.quote(location)
+        url = f"https://www.yellowpages.com/search?search_terms={service}&geo_location_terms={location}"
+    elif country.lower() == 'canada':
+        service = urllib.parse.quote(service.replace(' ', '+'))
+        location = urllib.parse.quote(location.replace(' ', '+'))
+        url = f"https://www.yellowpages.ca/search/si/1/{service}/{location}"
+    else:
+        # For other countries, return None to indicate we should use internet search
+        return None
+    
+    print(f"Generated URL: {url}")
+    return url
 
-text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-    chunk_size=512, chunk_overlap=0
-)
-doc_splits = text_splitter.split_documents(docs_list)
+def create_yellowpages_tool(query):
+    url = generate_yellowpages_url(query)
+    if url is None:
+        return None  # No Yellow Pages tool for this query
+    
+    loader = WebBaseLoader(url)
+    docs = loader.load()
+    
+    text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        chunk_size=512, chunk_overlap=0
+    )
+    doc_splits = text_splitter.split_documents(docs)
 
-vectorstore = FAISS.from_documents(
-    documents=doc_splits,
-    embedding=embd,
-)
+    vectorstore = FAISS.from_documents(
+        documents=doc_splits,
+        embedding=embd,
+    )
+    
+    vectorstore_retriever = vectorstore.as_retriever()
 
-vectorstore_retriever = vectorstore.as_retriever()
-
-vectorstore_search = create_retriever_tool(
-    retriever=vectorstore_retriever,
-    name="vectorstore_search",
-    description="Retrieve relevant info from a vectorstore that contains information of HVAC companies with their contact information"
-)
+    return create_retriever_tool(
+        retriever=vectorstore_retriever,
+        name="yellowpages_search",
+        description=f"Retrieve relevant info about {query} from Yellow Pages"
+    )
 
 # Preamble
 preamble = """
-You are an expert who answers the user's question with the most relevant datasource. You are equipped with an internet search tool and a special vectorstore of information about how to write good essays.
-You also have a 'random_operation_tool' tool, you must use it to compute the random operation between two numbers.
+You are an expert who answers the user's question with the most relevant datasource. You are equipped with an internet search tool and, for queries about locations in the USA or Canada, a Yellow Pages search tool.
 
-For questions about current data, statistics, or comparisons between countries (such as GDP), always use the internet_search tool to find the most up-to-date information.
+For questions about local businesses or services in the USA or Canada, use the yellowpages_search tool to find the most relevant information. The query has been intelligently parsed to extract the service and location.
 
-When using the internet_search tool, make sure to:
+For questions about locations outside the USA and Canada, or for any other type of query, use the internet_search tool.
+
+When using the yellowpages_search tool:
+1. Analyze the search results carefully.
+2. Provide a comprehensive answer based on the information found, including business names and contact information when available.
+3. If you can't find exact matches, provide the closest relevant data you can find and explain any limitations.
+
+When using the internet_search tool:
 1. Formulate a clear and specific search query.
 2. Analyze the search results carefully.
 3. Provide a comprehensive answer based on the information found.
@@ -97,19 +149,19 @@ class ActionLogger(BaseCallbackHandler):
         self.queue = queue
 
     def on_agent_action(self, action: AgentAction, **kwargs: Any) -> None:
-        self.queue.put(f"🛠️ Tool used: {action.tool}")
+        self.queue.put(f"Tool used: {action.tool}")
         logger.debug(f"Agent action: {action.tool}")
 
     def on_agent_finish(self, finish: AgentFinish, **kwargs: Any) -> None:
-        self.queue.put("✅ Agent finished")
+        self.queue.put("Agent finished.")
         logger.debug("Agent finished")
 
     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.queue.put("🔎 Searching")
+        self.queue.put("Chain started.")
         logger.debug("Chain started")
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.queue.put("✅ Done")
+        self.queue.put("Chain ended.")
         logger.debug("Chain ended")
 
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> None:
@@ -128,13 +180,6 @@ class ActionLogger(BaseCallbackHandler):
         self.queue.put(f"Thought: {text}")
         logger.debug(f"Thought: {text}")
 
-# Create the ReAct agent
-agent = create_cohere_react_agent(
-    llm=llm,
-    tools=[internet_search, vectorstore_search],
-    prompt=prompt,
-)
-
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -144,13 +189,34 @@ def ask():
     question = request.args.get('question')
     logger.info(f"Received question: {question}")
 
+    # Generate and log the URL
+    url = generate_yellowpages_url(question)
+    if url:
+        logger.info(f"Generated Yellow Pages URL: {url}")
+    else:
+        logger.info("Using internet search instead of Yellow Pages")
+
     def generate():
+        if url:
+            yield f"data: {json.dumps({'type': 'url', 'content': url})}\n\n"
+        
         queue = Queue()
         action_logger = ActionLogger(queue)
 
+        yellowpages_tool = create_yellowpages_tool(question)
+        tools = [internet_search]
+        if yellowpages_tool:
+            tools.append(yellowpages_tool)
+        
+        agent = create_cohere_react_agent(
+            llm=llm,
+            tools=tools,
+            prompt=prompt,
+        )
+
         agent_executor = AgentExecutor(
             agent=agent, 
-            tools=[internet_search, vectorstore_search], 
+            tools=tools, 
             verbose=True, 
             callbacks=[action_logger]
         )
