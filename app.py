@@ -41,7 +41,7 @@ llm = ChatCohere(model="command-r-plus", temperature=0.3)
 # Web search tool
 internet_search = TavilySearchResults()
 internet_search.name = "internet_search"
-internet_search.description = "Returns a list of relevant document snippets for a textual query retrieved from the internet."
+internet_search.description = "Returns a list of relevant document snippets for a textual query retrieved from the internet with contact info"
 
 class TavilySearchInput(BaseModel):
     query: str = Field(description="Query to search the internet with")
@@ -54,7 +54,7 @@ def parse_query_with_cohere(query):
     chat_model = ChatCohere(model="command", temperature=0)
     
     prompt = f"""
-    Parse the following query into a service, location, and country for a Yellow Pages search.
+    Parse the following query into a service, location, and country for a Yellow Pages search including phone numbers.
     Query: {query}
     
     Respond in the following format:
@@ -64,6 +64,7 @@ def parse_query_with_cohere(query):
     
     If a location isn't specified, use 'Toronto, ON' and 'Canada' as defaults.
     If a country isn't clearly specified, infer it from the location if possible.
+    
     """
     
     messages = [HumanMessage(content=prompt)]
@@ -144,7 +145,7 @@ When using the yellowpages_search tool:
 1. Analyze the search results carefully.
 2. Provide a comprehensive answer based on the information found, including business names and contact information when available.
 3. If you can't find exact matches, provide the closest relevant data you can find and explain any limitations.
-
+4. ALWAYS GET AND LIST PHONE NUMBERS OF BUSINESSES.
 When using the internet_search tool:
 1. Formulate a clear and specific search query.
 2. Analyze the search results carefully.
