@@ -88,9 +88,7 @@ def parse_query_with_cohere(query):
 
 def generate_yellowpages_url(query):
     service, location, country = parse_query_with_cohere(query)
-    
-    logger.info(f"Parsed query: Service: {service}, Location: {location}, Country: {country}")
-    
+
     if country.lower() == 'usa':
         service = urllib.parse.quote(service)
         location = urllib.parse.quote(location)
@@ -103,7 +101,7 @@ def generate_yellowpages_url(query):
         # For other countries, return None to indicate we should use internet search
         logger.info(f"Country {country} not supported, falling back to internet search")
         return None
-    
+
     logger.info(f"Generated URL: {url}")
     return url
 
