@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+import os
 from flask import Flask, render_template, request, Response
 import json
 import os
@@ -27,13 +29,21 @@ import traceback
 from queue import Queue
 from threading import Thread
 
+load_dotenv()
+
+
 app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Set API keys
-os.environ['COHERE_API_KEY'] = '2EsHiwqs35gpeVzU5aGeVjs9kYXBOTj1nWRSjAZi'
-os.environ["TAVILY_API_KEY"] = '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'
+# Replace the existing API key assignments with:
+cohere_api_key = os.getenv('COHERE_API_KEY')
+tavily_api_key = os.getenv('TAVILY_API_KEY')
+
+# Use the variables in your code
+os.environ['COHERE_API_KEY'] = cohere_api_key
+os.environ["TAVILY_API_KEY"] = tavily_api_key
 
 # LLM
 llm = ChatCohere(model="command-r-plus", temperature=0.3)
